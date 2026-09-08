@@ -133,8 +133,8 @@ export function TaskListView({ module, title, subtitle }: TaskListViewProps) {
   // confirmed live (a done subtask kept showing even with "Show done" off).
   // Hiding done needs to prune at every depth instead, so it's applied as a
   // separate pass below, after the normal tree-preserving filters.
-  const doneStatusId = statuses[statuses.length - 1]?.id;
-  const shouldHideDone = Boolean(doneStatusId) && !showDone && !statusFilter.includes(doneStatusId!);
+  const doneStatusId = statuses.find((status) => status.id === "done")?.id ?? null;
+  const shouldHideDone = doneStatusId !== null && !showDone && !statusFilter.includes(doneStatusId);
 
   const groups: TaskTableGroup[] = useMemo(() => {
     const filters: TaskFilters = {
@@ -148,7 +148,8 @@ export function TaskListView({ module, title, subtitle }: TaskListViewProps) {
       myTasksOnly,
       currentUserId: user?.id ?? "",
     };
-    const topLevel = tasks.filter((t) => t.parentId === null);
+    const taskIds = new Set(tasks.map((task) => task.id));
+    const topLevel = tasks.filter((task) => task.parentId === null || !taskIds.has(task.parentId));
     const filteredTopLevel = filterTopLevelTasks(topLevel, tasks, filters, assigneeNameById);
     const statusOrder = statuses.map((s) => s.id);
     const priorityOrder = priorities.map((p) => p.id);
@@ -218,7 +219,8 @@ export function TaskListView({ module, title, subtitle }: TaskListViewProps) {
       myTasksOnly,
       currentUserId: user?.id ?? "",
     };
-    const topLevel = tasks.filter((t) => t.parentId === null);
+    const taskIds = new Set(tasks.map((task) => task.id));
+    const topLevel = tasks.filter((task) => task.parentId === null || !taskIds.has(task.parentId));
     const filteredTopLevel = filterTopLevelTasks(topLevel, tasks, filters, assigneeNameById);
     const visible = flattenVisibleTree(filteredTopLevel, tasks, new Set()).map((row) => row.task);
     // Same subtree-leak fix as the list/grouped view above — a subtask with

@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Autorise l'accès en local via votre adresse IP
+  allowedDevOrigins: ['192.168.1.22'],
   // Hostinger's proxy sits in front of the Node server and caches responses
   // more aggressively than Next.js's own defaults — including, sometimes,
   // the raw React Server Component payload meant for a client-side
