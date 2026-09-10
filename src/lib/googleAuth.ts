@@ -41,7 +41,12 @@ export function getGoogleAuthUrl(): string {
 export async function exchangeCodeForTokens(code: string): Promise<void> {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  if (!clientId || !clientSecret) throw new Error("Google OAuth isn't configured.");
+  if (!clientId || !clientSecret) {
+    throw new Error(
+      "Google OAuth credentials not configured. Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to .env.local. " +
+      "See GOOGLE_OAUTH_DEBUG.md for setup instructions."
+    );
+  }
 
   const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
@@ -84,7 +89,12 @@ export async function exchangeCodeForTokens(code: string): Promise<void> {
 async function refreshAccessToken(connection: { id: string; refreshToken: string }): Promise<string> {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  if (!clientId || !clientSecret) throw new Error("Google OAuth isn't configured.");
+  if (!clientId || !clientSecret) {
+    throw new Error(
+      "Google OAuth credentials not configured. Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to .env.local. " +
+      "See GOOGLE_OAUTH_DEBUG.md for setup instructions."
+    );
+  }
 
   const response = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",

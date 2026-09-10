@@ -27,6 +27,18 @@ export async function sendGmail(to: string, subject: string, body: string): Prom
   return { id: data.id };
 }
 
+export async function sendGmailHtml(to: string, subject: string, htmlBody: string): Promise<{ id: string }> {
+  const raw = [`To: ${to}`, `Subject: ${encodeHeaderValue(subject)}`, "MIME-Version: 1.0", "Content-Type: text/html; charset=UTF-8", "", htmlBody].join("\r\n");
+  const encoded = Buffer.from(raw, "utf-8").toString("base64url");
+  const response = await googleFetch(`${GMAIL_BASE}/messages/send`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ raw: encoded }),
+  });
+  const data = (await response.json()) as { id: string };
+  return { id: data.id };
+}
+
 interface GmailSummary {
   id: string;
   from: string;

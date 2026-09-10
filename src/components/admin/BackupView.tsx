@@ -10,6 +10,7 @@ import { formatRelativeTime, formatDueDate } from "@/lib/date";
 import { cn } from "@/lib/cn";
 import { GoogleConnectionCard } from "@/components/admin/GoogleConnectionCard";
 import { GoogleSheetBackupSection } from "@/components/admin/GoogleSheetBackupSection";
+import { EmailReportSection } from "@/components/admin/EmailReportSection";
 import { TrashIcon } from "@/components/ui/icons";
 import type { ArchiveFilters, ArchiveModule } from "@/types/archive";
 
@@ -144,6 +145,8 @@ export function BackupView() {
       <GoogleConnectionCard />
 
       <GoogleSheetBackupSection />
+
+      <EmailReportSection />
 
       <section className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
         <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Archive old data</h2>
