@@ -11,6 +11,9 @@
   endpoint — EvoTasks does all the parsing/normalization server-side, so
   this script stays intentionally dumb and rarely needs updating.
 
+    Pass -ReplayStart and -ReplayEnd (yyyy-MM-dd HH:mm:ss) to re-fetch a
+    bounded historical window without changing the normal sync checkpoint.
+
   Meant to be run on a schedule (Task Scheduler, every 10-15 min) — see
   the setup notes at the bottom of this file.
 
@@ -22,6 +25,11 @@
 #>
 
 # ---- Fill these in ----
+param(
+    [string]$ReplayStart,
+    [string]$ReplayEnd
+)
+
 $PointeuseUrl   = "http://192.168.1.137:8080"        # ZKBio Time base URL (local)
 $PointeuseUser  = "admin"                             # ZKBio Time username
 $PointeusePass  = "REPLACE_ME"                        # ZKBio Time password
@@ -65,12 +73,23 @@ try {
     #    to re-fetch the same punches repeatedly: EvoTasks' ingest endpoint
     #    upserts by the pointeuse's own transaction id, so re-sending
     #    something already synced is a harmless no-op.
-    $OverlapMinutes = 30
     $endTime = Get-Date
-    $lastCheckpoint = if (Test-Path $StateFile) { [datetime](Get-Content $StateFile -Raw) } else { $endTime.AddHours(-24) }
-    $startTime = $lastCheckpoint.AddMinutes(-$OverlapMinutes)
-    $startStr = $startTime.ToString("yyyy-MM-dd HH:mm:ss")
-    $endStr = $endTime.ToString("yyyy-MM-dd HH:mm:ss")
+    $replayMode = [bool]($ReplayStart -or $ReplayEnd)
+    if ($replayMode) {
+        if (-not $ReplayStart -or -not $ReplayEnd) { throw "ReplayStart et ReplayEnd doivent être fournis ensemble (format yyyy-MM-dd HH:mm:ss)." }
+        $culture = [Globalization.CultureInfo]::InvariantCulture
+        $replayStartTime = [datetime]::ParseExact($ReplayStart, "yyyy-MM-dd HH:mm:ss", $culture)
+        $replayEndTime = [datetime]::ParseExact($ReplayEnd, "yyyy-MM-dd HH:mm:ss", $culture)
+        if ($replayStartTime -ge $replayEndTime) { throw "ReplayStart doit précéder ReplayEnd." }
+        $startStr = $ReplayStart
+        $endStr = $ReplayEnd
+    } else {
+        $OverlapMinutes = 30
+        $lastCheckpoint = if (Test-Path $StateFile) { [datetime](Get-Content $StateFile -Raw) } else { $endTime.AddHours(-24) }
+        $startTime = $lastCheckpoint.AddMinutes(-$OverlapMinutes)
+        $startStr = $startTime.ToString("yyyy-MM-dd HH:mm:ss")
+        $endStr = $endTime.ToString("yyyy-MM-dd HH:mm:ss")
+    }
 
     # 3. Fetch every page of transactions in that window. ZKBio Time's own
     #    docs are ambiguous about whether a token from /api-token-auth/ is
@@ -122,7 +141,11 @@ try {
 
     # 5. Only advance the checkpoint after a successful push, so a failed
     #    run retries the same window next time instead of losing data.
-    $endTime.ToString("o") | Set-Content -Path $StateFile
+    if (-not $replayMode) {
+        $endTime.ToString("o") | Set-Content -Path $StateFile
+    } else {
+        Write-Log "Rejeu terminé ; le checkpoint normal n'a pas été modifié."
+    }
     Write-Log "Done."
 } catch {
     Write-Log "ERROR: $($_.Exception.Message)"

@@ -426,16 +426,12 @@ export function BiometricView() {
   // full history; "absent" only means something relative to one day.
   const absentEmployees = useMemo(() => getAbsentEmployees(employees, detailDayEvents), [employees, detailDayEvents]);
 
-  // One row per (employee, day) in the filtered set, with lateness judged
-  // against the configurable schedule — same filtered-data footing as the
-  // charts/absents above. The "Retards" KPI tile and "Retards par employé"
-  // chart read from this (the whole filtered period), same as every other
-  // KPI/chart on the page — only the "Détail des présences" table below
-  // drills into a single day.
+  // The chart covers the full filtered period; the KPI and detail table use
+  // the same single reference day so their lateness count agrees.
   const periodAttendance = useMemo(() => computeDailyAttendance(filtered, employees, schedule), [filtered, employees, schedule]);
-  const lateCount = useMemo(() => periodAttendance.filter((r) => r.isLate).length, [periodAttendance]);
   const lateChart = useMemo(() => countLateByEmployee(periodAttendance), [periodAttendance]);
   const dailyAttendance = useMemo(() => computeDailyAttendance(detailDayEvents, employees, schedule), [detailDayEvents, employees, schedule]);
+  const lateCount = useMemo(() => dailyAttendance.filter((r) => r.isLate).length, [dailyAttendance]);
 
   // "Absences" section under Détail des présences — its own month/year
   // filter (independent of the page's other filters), built from the full

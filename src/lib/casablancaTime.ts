@@ -1,4 +1,5 @@
 const CASABLANCA_TZ = "Africa/Casablanca";
+const CASABLANCA_GMT_CUTOVER = Date.UTC(2026, 8, 20, 1);
 
 // ZKBio Time returns naive "YYYY-MM-DD HH:mm:ss" timestamps with no offset
 // attached — they're the device's own wall-clock reading, in Morocco time.
@@ -8,6 +9,9 @@ const CASABLANCA_TZ = "Africa/Casablanca";
 export function casablancaWallClockToUtc(naive: string): Date {
   const isoLike = naive.trim().replace(" ", "T");
   const guess = new Date(`${isoLike}Z`);
+  // Morocco returned to UTC at 02:00 local on 2026-09-20. Older Node/ICU
+  // timezone data can still report UTC+1 after that legal transition.
+  if (guess.getTime() >= CASABLANCA_GMT_CUTOVER) return guess;
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: CASABLANCA_TZ,
     year: "numeric",
@@ -47,6 +51,17 @@ const WEEKDAY_INDEX: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, 
 // wall-clock time no matter their own PC's clock/timezone settings.
 function casablancaParts(input: Date | string): CasablancaParts {
   const d = typeof input === "string" ? new Date(input) : input;
+  if (d.getTime() >= CASABLANCA_GMT_CUTOVER) {
+    return {
+      year: d.getUTCFullYear(),
+      month: d.getUTCMonth() + 1,
+      day: d.getUTCDate(),
+      hour: d.getUTCHours(),
+      minute: d.getUTCMinutes(),
+      second: d.getUTCSeconds(),
+      weekday: d.getUTCDay(),
+    };
+  }
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: CASABLANCA_TZ,
     year: "numeric",
