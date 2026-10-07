@@ -236,7 +236,6 @@ export function useTasks(module: TaskModule): UseTasksResult {
         createdAt: now,
         updatedAt: now,
       };
-      let recurrenceCleared = false;
       try {
         // Claim the spawn *before* creating anything: if a concurrent
         // session (another tab, another user viewing the same list) already
@@ -246,7 +245,6 @@ export function useTasks(module: TaskModule): UseTasksResult {
         // session that raced to advance the same overdue task.
         const clearResult = await updateTaskRequest(source.id, { recurrence: null });
         if (!clearResult.recurrenceCleared) return;
-        recurrenceCleared = true;
         const created = await createTaskRequest(draft, source.id);
         await tasksSWR.mutate(
           (current) => {
@@ -256,22 +254,8 @@ export function useTasks(module: TaskModule): UseTasksResult {
           },
           { revalidate: false }
         );
-      } catch (err) {
-        if (recurrenceCleared) {
-          try {
-            await updateTaskRequest(source.id, { recurrence: source.recurrence });
-            await tasksSWR.mutate(
-              (current) => (current ?? tasksRef.current).map((t) => (t.id === source.id ? { ...t, recurrence: source.recurrence } : t)),
-              { revalidate: false }
-            );
-          } catch (restoreError) {
-            toast.error(
-              `Could not restore the recurring rule: ${restoreError instanceof Error ? restoreError.message : "Unknown error."}`
-            );
-            return;
-          }
-        }
-        toast.error(err instanceof Error ? err.message : "Failed to schedule the next occurrence.");
+      } catch {
+        // Best-effort: source.recurrence stays set on failure, so it's retried next time tasks load.
       } finally {
         overdueSpawnsInFlightRef.current.delete(source.id);
       }
