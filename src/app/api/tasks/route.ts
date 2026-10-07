@@ -6,7 +6,8 @@ import { getVisibilityScope } from "@/lib/visibility";
 import { toPublicTask } from "@/lib/publicTask";
 import { notifyTaskAssignment } from "@/lib/taskNotify";
 import { canCreateTasks } from "@/config/roleMeta";
-import type { Prisma } from "@/generated/prisma/client";
+import { Prisma } from "@/generated/prisma/client";
+import type { Task as DbTask } from "@/generated/prisma/client";
 import type { TaskDraft, TaskModule } from "@/types/task";
 
 export async function GET(request: NextRequest) {
@@ -47,40 +48,68 @@ export async function POST(request: NextRequest) {
     order = (maxOrder._max.order ?? -1) + 1;
   }
 
-  // Ownership is never taken from the client body — either it's a fresh
-  // manual creation (owned by whoever's making the request), or it's the
-  // next occurrence of a recurring task, which inherits the original
-  // series' owner so permissions don't shift to whichever browser happened
-  // to be open when the occurrence was spawned.
   let createdBy = sessionUser.id;
+  let recurrence: Prisma.InputJsonValue | undefined = (draft.recurrence as unknown as Prisma.InputJsonValue) ?? undefined;
+  let recurrenceSourceId: string | undefined;
   if (draft.continuesTaskId) {
-    const source = await db.task.findUnique({ where: { id: draft.continuesTaskId }, select: { createdBy: true } });
-    if (source?.createdBy) createdBy = source.createdBy;
+    const source = await db.task.findUnique({
+      where: { id: draft.continuesTaskId },
+      select: { createdBy: true, dueDate: true, recurrence: true },
+    });
+    if (!source) return NextResponse.json({ error: "Recurring source task not found." }, { status: 404 });
+    if (!source.recurrence) return NextResponse.json({ error: "Source task is not recurring." }, { status: 400 });
+
+    const sourceDueDate = source.dueDate;
+    const nextDueDate = draft.dueDate ? new Date(draft.dueDate) : null;
+    if (!sourceDueDate || !nextDueDate || Number.isNaN(nextDueDate.getTime()) || nextDueDate <= sourceDueDate) {
+      return NextResponse.json({ error: "The next occurrence must have a due date after the source task." }, { status: 400 });
+    }
+
+    if (source.createdBy) createdBy = source.createdBy;
+    recurrence = source.recurrence as Prisma.InputJsonValue;
+    recurrenceSourceId = draft.continuesTaskId;
   }
 
-  const task = await db.task.create({
-    data: {
-      ...(draft.id && { id: draft.id }),
-      module: draft.module ?? "task",
-      title: draft.title.trim(),
-      description: draft.description ?? "",
-      status: draft.status ?? "todo",
-      priority: draft.priority ?? "none",
-      assigneeIds: draft.assigneeIds ?? [],
-      teamIds: draft.teamIds ?? [],
-      excludedUserIds: draft.excludedUserIds ?? [],
-      startDate: draft.startDate ? new Date(draft.startDate) : null,
-      dueDate: draft.dueDate ? new Date(draft.dueDate) : null,
-      recurrence: (draft.recurrence as unknown as Prisma.InputJsonValue) ?? undefined,
-      order,
-      parentId: draft.parentId ?? null,
-      projectId: draft.projectId ?? null,
-      customValues: draft.customValues ?? {},
-      createdBy,
-    },
-  });
+  const data = {
+    ...(draft.id && { id: draft.id }),
+    module: draft.module ?? "task",
+    title: draft.title.trim(),
+    description: draft.description ?? "",
+    status: draft.status ?? "todo",
+    priority: draft.priority ?? "none",
+    assigneeIds: draft.assigneeIds ?? [],
+    teamIds: draft.teamIds ?? [],
+    excludedUserIds: draft.excludedUserIds ?? [],
+    startDate: draft.startDate ? new Date(draft.startDate) : null,
+    dueDate: draft.dueDate ? new Date(draft.dueDate) : null,
+    recurrence,
+    ...(recurrenceSourceId && { recurrenceSourceId }),
+    order,
+    parentId: draft.parentId ?? null,
+    projectId: draft.projectId ?? null,
+    customValues: draft.customValues ?? {},
+    createdBy,
+  } satisfies Prisma.TaskUncheckedCreateInput;
+
+  let task: DbTask;
+  if (recurrenceSourceId) {
+    try {
+      task = await db.task.upsert({
+        where: { recurrenceSourceId },
+        create: data,
+        update: {},
+      });
+    } catch (error) {
+      if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") throw error;
+      const existing = await db.task.findUnique({ where: { recurrenceSourceId } });
+      if (!existing) throw error;
+      task = existing;
+    }
+  } else {
+    task = await db.task.create({ data });
+  }
 
   void notifyTaskAssignment(task.assigneeIds, task);
 
-  return NextResponse.json(toPublicTask(task), { status: 201 });
+  return NextResponse.json(toPublicTask(task), { status: recurrenceSourceId ? 200 : 201 });
 }

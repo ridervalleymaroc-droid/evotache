@@ -98,29 +98,33 @@ enum TaskModule {
 }
 
 model Task {
-  id              String     @id @default(cuid())
-  module          TaskModule
-  title           String
-  description     String     @default("")
-  status          String
-  priority        String
-  assigneeIds     String[]   @default([])
-  teamIds         String[]   @default([])
-  excludedUserIds String[]   @default([])
-  startDate       DateTime?
-  dueDate         DateTime?
-  recurrence      Json?
-  order           Float
-  customValues    Json       @default("{}")
+  id                 String     @id @default(cuid())
+  module             TaskModule
+  title              String
+  description        String     @default("")
+  status             String
+  priority           String
+  assigneeIds        String[]   @default([])
+  teamIds            String[]   @default([])
+  excludedUserIds    String[]   @default([])
+  startDate          DateTime?
+  dueDate            DateTime?
+  recurrence         Json?
+  order              Float
+  customValues       Json       @default("{}")
   // Non-admins get full edit rights only on tasks they created themselves
   // (see src/lib/taskPermissions.ts); null on tasks that predate this column.
-  createdBy       String?
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
+  createdBy          String?
+  recurrenceSourceId String?    @unique
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
 
   parentId String?
   parent   Task?   @relation("TaskParent", fields: [parentId], references: [id], onDelete: Cascade)
   children Task[]  @relation("TaskParent")
+
+  recurrenceSource Task? @relation("TaskRecurrence", fields: [recurrenceSourceId], references: [id], onDelete: SetNull)
+  recurrenceNext   Task? @relation("TaskRecurrence")
 
   projectId String?
   project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)

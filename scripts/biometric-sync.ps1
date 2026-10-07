@@ -32,9 +32,9 @@ param(
 
 $PointeuseUrl   = "http://192.168.1.137:8080"        # ZKBio Time base URL (local)
 $PointeuseUser  = "admin"                             # ZKBio Time username
-$PointeusePass  = "REPLACE_ME"                        # ZKBio Time password
+$PointeusePass  = "REPLACE_ME"                        # ZKBio Time password REPLACE_ME
 $EvoTasksUrl    = "https://evotasks.app/api/biometric/ingest"
-$IngestToken    = "REPLACE_ME"                        # must match BIOMETRIC_INGEST_TOKEN on Hostinger
+$IngestToken    = "REPLACE_ME"                        # must match BIOMETRIC_INGEST_TOKEN on Hostinger REPLACE_ME
 # ------------------------
 
 $StateFile = Join-Path $PSScriptRoot "biometric-sync-state.txt"
