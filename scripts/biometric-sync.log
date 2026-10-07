@@ -1,9 +1,0 @@
-[2026-10-06 14:44:18] Connexion à la pointeuse (http://192.168.1.137:8080)...
-[2026-10-06 14:44:18] ERROR: Échec de connexion à la POINTEUSE (identifiants admin incorrects ?) : Le serveur distant a retourn� une erreur�: (400) Demande incorrecte.
-[2026-10-06 15:04:47] Connexion à la pointeuse (http://192.168.1.137:8080)...
-[2026-10-06 15:04:47] Connexion pointeuse OK.
-[2026-10-06 15:04:50] Fetched 692 transaction(s) for 2026-09-21 00:00:00 .. 2026-10-07 23:59:59 (format d'autorisation utilisé : Token).
-[2026-10-06 15:04:50] Envoi de 692 transaction(s) vers EvoTasks...
-[2026-10-06 15:04:55] Ingested: 692 synced, 160 check-in(s), 109 check-out(s).
-[2026-10-06 15:04:55] Rejeu terminé ; le checkpoint normal n'a pas été modifié.
-[2026-10-06 15:04:55] Done.
