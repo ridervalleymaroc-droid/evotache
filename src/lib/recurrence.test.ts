@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { dateAtCasablancaMidnight } from "./casablancaDate";
-import { isOverdue, toCasablancaDateInputValue } from "./date";
+import { formatCalendarDate, isOverdue, toCasablancaDateInputValue } from "./date";
 import { computeNextOccurrence, isRecurringCompletion } from "./recurrence";
 
 test("weekly Monday-to-Saturday recurrence advances October 6, 2026 to October 7", () => {
@@ -48,6 +48,20 @@ test("overdue checks use Casablanca calendar days independently of the browser t
     for (const timeZone of ["UTC", "Europe/London", "Europe/Paris"]) {
       process.env.TZ = timeZone;
       assert.equal(isOverdue(dueAtCasablancaMidnight, laterThatCasablancaDay), false);
+    }
+  } finally {
+    if (originalTimeZone === undefined) delete process.env.TZ;
+    else process.env.TZ = originalTimeZone;
+  }
+});
+
+test("due dates format by Casablanca calendar day rather than UTC date", () => {
+  const originalTimeZone = process.env.TZ;
+  try {
+    for (const timeZone of ["UTC", "Etc/GMT-1", "Etc/GMT-2"]) {
+      process.env.TZ = timeZone;
+      assert.equal(formatCalendarDate("2026-10-08T23:00:00.000Z", "fr-FR"), "9 oct.");
+      assert.equal(formatCalendarDate("2026-10-08T00:00:00.000Z", "fr-FR"), "8 oct.");
     }
   } finally {
     if (originalTimeZone === undefined) delete process.env.TZ;

@@ -2,16 +2,24 @@ import { calendarDateInCasablanca, dateAtCasablancaMidnight } from "./casablanca
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+export function formatCalendarDate(iso: string, locale?: string): string {
+  return new Intl.DateTimeFormat(locale, {
+    day: "numeric",
+    month: "short",
+    timeZone: "Africa/Casablanca",
+  }).format(new Date(iso));
+}
+
 export function formatDueDate(iso: string | null): string {
   if (!iso) return "No due date";
   const date = new Date(iso);
   const year = Number(calendarDateInCasablanca(new Date()).slice(0, 4));
-  return date.toLocaleDateString(undefined, {
+  return new Intl.DateTimeFormat(undefined, {
     month: "short",
     day: "numeric",
     year: Number(calendarDateInCasablanca(date).slice(0, 4)) === year ? undefined : "numeric",
     timeZone: "Africa/Casablanca",
-  });
+  }).format(date);
 }
 
 export function isOverdue(iso: string | null, now = new Date()): boolean {

@@ -1,5 +1,6 @@
 import type { Assignee, GroupField, SortDirection, SortField, Task, TaskFilters } from "@/types/task";
 import type { PriorityDef, StatusDef } from "@/types/taskMeta";
+import { toCasablancaDateInputValue } from "@/lib/date";
 
 export function taskMatchesFilters(task: Task, filters: TaskFilters, assigneeNameById: Record<string, string>): boolean {
   if (filters.statuses.length && !filters.statuses.includes(task.status)) return false;
@@ -41,7 +42,10 @@ export function sortTasks(tasks: Task[], field: SortField, direction: SortDirect
         result = priorityOrder.indexOf(a.priority) - priorityOrder.indexOf(b.priority);
         break;
       case "dueDate":
-        result = (a.dueDate ? new Date(a.dueDate).getTime() : Infinity) - (b.dueDate ? new Date(b.dueDate).getTime() : Infinity);
+        if (!a.dueDate && !b.dueDate) result = 0;
+        else if (!a.dueDate) result = Infinity;
+        else if (!b.dueDate) result = -Infinity;
+        else result = toCasablancaDateInputValue(a.dueDate).localeCompare(toCasablancaDateInputValue(b.dueDate));
         break;
       case "createdAt":
         result = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();

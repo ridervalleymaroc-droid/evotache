@@ -11,7 +11,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { canManageUsers } from "@/config/roleMeta";
 import { getDescendantIds } from "@/lib/taskTree";
 import { isRecurringCompletion } from "@/lib/recurrence";
-import { isOverdue, toCasablancaDateInputValue } from "@/lib/date";
+import { formatCalendarDate, isOverdue, toCasablancaDateInputValue } from "@/lib/date";
 import type { Assignee, Task, TaskDraft, TaskModule } from "@/types/task";
 import type { AppUser } from "@/types/user";
 import type { StatusDef, PriorityDef } from "@/types/taskMeta";
@@ -295,9 +295,7 @@ export function useTasks(module: TaskModule): UseTasksResult {
           { revalidate: false }
         );
         if (nextOccurrence) {
-          toast.success(
-            `Next occurrence scheduled for ${new Date(nextOccurrence.dueDate!).toLocaleDateString(undefined, { month: "short", day: "numeric" })}.`
-          );
+          toast.success(`Next occurrence scheduled for ${formatCalendarDate(nextOccurrence.dueDate!)}.`);
         }
       } catch (err) {
         await tasksSWR.mutate(previous, { revalidate: false });
