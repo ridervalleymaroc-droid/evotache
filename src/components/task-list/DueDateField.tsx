@@ -1,6 +1,12 @@
 "use client";
 
-import { formatDueDate, fromDateInputValue, isDueSoon, isOverdue, toDateInputValue } from "@/lib/date";
+import {
+  formatDueDate,
+  fromCasablancaDateInputValue,
+  isDueSoon,
+  isOverdue,
+  toCasablancaDateInputValue,
+} from "@/lib/date";
 import { CalendarIcon } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
 
@@ -33,8 +39,8 @@ export function DueDateField({ value, onChange, readOnly }: DueDateFieldProps) {
       <CalendarIcon className="h-3.5 w-3.5 shrink-0" />
       <input
         type="date"
-        value={toDateInputValue(value)}
-        onChange={(event) => onChange(fromDateInputValue(event.target.value))}
+        value={toCasablancaDateInputValue(value)}
+        onChange={(event) => onChange(fromCasablancaDateInputValue(event.target.value))}
         aria-label="Due date"
         className="min-w-[100px] cursor-pointer bg-transparent text-xs outline-none [color-scheme:light] dark:[color-scheme:dark]"
       />

@@ -6,7 +6,12 @@ import { getVisibilityScope } from "@/lib/visibility";
 import { toPublicTask } from "@/lib/publicTask";
 import { notifyTaskAssignment } from "@/lib/taskNotify";
 import { canCreateTasks } from "@/config/roleMeta";
-import type { Prisma } from "@/generated/prisma/client";
+import { Prisma } from "@/generated/prisma/client";
+import {
+  createRecurringOccurrence,
+  RecurrenceSourceNotFoundError,
+  RecurrenceSourceUnavailableError,
+} from "@/lib/recurringTask";
 import type { TaskDraft, TaskModule } from "@/types/task";
 
 export async function GET(request: NextRequest) {
@@ -33,7 +38,7 @@ export async function POST(request: NextRequest) {
   if (!sessionUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!canCreateTasks(sessionUser.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  let draft: TaskDraft & { continuesTaskId?: string };
+  let draft: TaskDraft & { continuesTaskId?: string; completesSource?: boolean; completionStatus?: string };
   try {
     draft = await request.json();
   } catch {
@@ -47,15 +52,27 @@ export async function POST(request: NextRequest) {
     order = (maxOrder._max.order ?? -1) + 1;
   }
 
-  // Ownership is never taken from the client body — either it's a fresh
-  // manual creation (owned by whoever's making the request), or it's the
-  // next occurrence of a recurring task, which inherits the original
-  // series' owner so permissions don't shift to whichever browser happened
-  // to be open when the occurrence was spawned.
-  let createdBy = sessionUser.id;
   if (draft.continuesTaskId) {
-    const source = await db.task.findUnique({ where: { id: draft.continuesTaskId }, select: { createdBy: true } });
-    if (source?.createdBy) createdBy = source.createdBy;
+    try {
+      const result = await createRecurringOccurrence({
+        client: db,
+        draft,
+        sourceId: draft.continuesTaskId,
+        order,
+        createdBy: sessionUser.id,
+        ...(draft.completesSource && draft.completionStatus && { completionStatus: draft.completionStatus }),
+      });
+      if (result.created) void notifyTaskAssignment(result.task.assigneeIds, result.task);
+      return NextResponse.json(toPublicTask(result.task), { status: result.created ? 201 : 200 });
+    } catch (error) {
+      if (error instanceof RecurrenceSourceNotFoundError) {
+        return NextResponse.json({ error: error.message }, { status: 404 });
+      }
+      if (error instanceof RecurrenceSourceUnavailableError) {
+        return NextResponse.json({ error: error.message }, { status: 409 });
+      }
+      throw error;
+    }
   }
 
   const task = await db.task.create({
@@ -76,10 +93,9 @@ export async function POST(request: NextRequest) {
       parentId: draft.parentId ?? null,
       projectId: draft.projectId ?? null,
       customValues: draft.customValues ?? {},
-      createdBy,
+      createdBy: sessionUser.id,
     },
   });
-
   void notifyTaskAssignment(task.assigneeIds, task);
 
   return NextResponse.json(toPublicTask(task), { status: 201 });

@@ -1,57 +1,45 @@
+import { calendarDateInCasablanca, dateAtCasablancaMidnight } from "./casablancaDate";
+
 const DAY_MS = 24 * 60 * 60 * 1000;
-
-function startOfDay(date: Date): Date {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-function isCurrentYear(date: Date): boolean {
-  return date.getFullYear() === new Date().getFullYear();
-}
 
 export function formatDueDate(iso: string | null): string {
   if (!iso) return "No due date";
   const date = new Date(iso);
+  const year = Number(calendarDateInCasablanca(new Date()).slice(0, 4));
   return date.toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
-    year: isCurrentYear(date) ? undefined : "numeric",
+    year: Number(calendarDateInCasablanca(date).slice(0, 4)) === year ? undefined : "numeric",
+    timeZone: "Africa/Casablanca",
   });
 }
 
-export function isOverdue(iso: string | null): boolean {
+export function isOverdue(iso: string | null, now = new Date()): boolean {
   if (!iso) return false;
-  const due = startOfDay(new Date(iso));
-  const today = startOfDay(new Date());
-  return due.getTime() < today.getTime();
+  return calendarDateInCasablanca(new Date(iso)) < calendarDateInCasablanca(now);
 }
 
-export function isDueToday(iso: string | null): boolean {
+export function isDueToday(iso: string | null, now = new Date()): boolean {
   if (!iso) return false;
-  const due = startOfDay(new Date(iso));
-  const today = startOfDay(new Date());
-  return due.getTime() === today.getTime();
+  return calendarDateInCasablanca(new Date(iso)) === calendarDateInCasablanca(now);
 }
 
-export function isToday(iso: string): boolean {
-  return startOfDay(new Date(iso)).getTime() === startOfDay(new Date()).getTime();
+export function isToday(iso: string, now = new Date()): boolean {
+  return calendarDateInCasablanca(new Date(iso)) === calendarDateInCasablanca(now);
 }
 
-export function isDueSoon(iso: string | null): boolean {
+export function isDueSoon(iso: string | null, now = new Date()): boolean {
   if (!iso) return false;
-  const due = startOfDay(new Date(iso));
-  const today = startOfDay(new Date());
-  const diff = due.getTime() - today.getTime();
+  const [dueYear, dueMonth, dueDayOfMonth] = calendarDateInCasablanca(new Date(iso)).split("-").map(Number);
+  const [todayYear, todayMonth, todayDay] = calendarDateInCasablanca(now).split("-").map(Number);
+  const dueDay = Date.UTC(dueYear, dueMonth - 1, dueDayOfMonth);
+  const today = Date.UTC(todayYear, todayMonth - 1, todayDay);
+  const diff = dueDay - today;
   return diff >= 0 && diff <= DAY_MS * 2;
 }
 
 export function toDateInputValue(iso: string | null): string {
   if (!iso) return "";
-  // Read back the *local* calendar date, not a naive slice of the UTC
-  // string — fromDateInputValue() stores local midnight converted to UTC,
-  // so in any timezone ahead of UTC that UTC string's date is one day
-  // earlier than what the user picked.
   const date = new Date(iso);
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -62,6 +50,16 @@ export function toDateInputValue(iso: string | null): string {
 export function fromDateInputValue(value: string): string | null {
   if (!value) return null;
   return new Date(`${value}T00:00:00`).toISOString();
+}
+
+export function toCasablancaDateInputValue(iso: string | null): string {
+  if (!iso) return "";
+  return calendarDateInCasablanca(new Date(iso));
+}
+
+export function fromCasablancaDateInputValue(value: string): string | null {
+  if (!value) return null;
+  return dateAtCasablancaMidnight(value).toISOString();
 }
 
 /** Same local-time reasoning as toDateInputValue(), extended with hours/minutes for `<input type="datetime-local">`. */

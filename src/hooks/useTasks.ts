@@ -10,8 +10,8 @@ import { useToast } from "@/components/ui/Toast";
 import { useAuth } from "@/hooks/useAuth";
 import { canManageUsers } from "@/config/roleMeta";
 import { getDescendantIds } from "@/lib/taskTree";
-import { computeNextOccurrence } from "@/lib/recurrence";
-import { fromDateInputValue, isOverdue, toDateInputValue } from "@/lib/date";
+import { isRecurringCompletion } from "@/lib/recurrence";
+import { isOverdue, toCasablancaDateInputValue } from "@/lib/date";
 import type { Assignee, Task, TaskDraft, TaskModule } from "@/types/task";
 import type { AppUser } from "@/types/user";
 import type { StatusDef, PriorityDef } from "@/types/taskMeta";
@@ -63,8 +63,8 @@ export function useTasks(module: TaskModule): UseTasksResult {
   // actually actionable. Non-recurring tasks are unaffected.
   const tasks = useMemo(() => {
     const all = tasksSWR.data ?? [];
-    const todayStr = toDateInputValue(new Date().toISOString());
-    return all.filter((t) => !t.recurrence || !t.dueDate || toDateInputValue(t.dueDate) <= todayStr);
+    const todayStr = toCasablancaDateInputValue(new Date().toISOString());
+    return all.filter((t) => !t.recurrence || !t.dueDate || toCasablancaDateInputValue(t.dueDate) <= todayStr);
   }, [tasksSWR.data]);
   const statuses = useMemo(() => statusesSWR.data ?? [], [statusesSWR.data]);
   const priorities = useMemo(() => prioritiesSWR.data ?? [], [prioritiesSWR.data]);
@@ -146,15 +146,10 @@ export function useTasks(module: TaskModule): UseTasksResult {
   // own recurrence cleared, since the rule now lives on the new occurrence;
   // otherwise reopening it by mistake would spawn a duplicate.
   const spawnNextOccurrence = useCallback(
-    async (source: Task) => {
-      if (!source.recurrence) return;
-      const base = source.dueDate ? new Date(source.dueDate) : new Date();
-      const next = computeNextOccurrence(source.recurrence, base);
-      const y = next.getFullYear();
-      const m = String(next.getMonth() + 1).padStart(2, "0");
-      const d = String(next.getDate()).padStart(2, "0");
+    async (source: Task, completionStatus?: string) => {
+      if (!source.recurrence) return undefined;
       const firstId = statusesRef.current[0]?.id;
-      if (!firstId) return;
+      if (!firstId) return undefined;
       const siblings = tasksRef.current.filter((t) => t.parentId === source.parentId);
       const now = new Date().toISOString();
       const draft: TaskDraft = {
@@ -168,7 +163,7 @@ export function useTasks(module: TaskModule): UseTasksResult {
         teamIds: source.teamIds,
         excludedUserIds: source.excludedUserIds,
         startDate: null,
-        dueDate: fromDateInputValue(`${y}-${m}-${d}`),
+        dueDate: null,
         recurrence: source.recurrence,
         parentId: source.parentId,
         projectId: source.projectId,
@@ -177,26 +172,12 @@ export function useTasks(module: TaskModule): UseTasksResult {
         createdAt: now,
         updatedAt: now,
       };
-      try {
-        const created = await createTaskRequest(draft, source.id);
-        // Dedupe by id rather than blindly appending — a concurrent
-        // revalidation of this same SWR key could otherwise already have
-        // picked up the newly created row by the time this resolves,
-        // leaving it listed twice.
-        await tasksSWR.mutate(
-          (current) => {
-            const list = current ?? tasksRef.current;
-            return list.some((t) => t.id === created.id) ? list : [...list, created];
-          },
-          { revalidate: false }
-        );
-        toast.success(`Next occurrence scheduled for ${next.toLocaleDateString(undefined, { month: "short", day: "numeric" })}.`);
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Failed to schedule the next occurrence.");
-      }
+      return createTaskRequest(draft, source.id, {
+        completesSource: Boolean(completionStatus),
+        ...(completionStatus && { completionStatus }),
+      });
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [toast]
+    []
   );
 
   // A recurring task that goes overdue without being completed spawns its
@@ -208,10 +189,6 @@ export function useTasks(module: TaskModule): UseTasksResult {
   const advanceOverdueOccurrence = useCallback(
     async (source: Task) => {
       if (!source.recurrence || !source.dueDate) return;
-      const next = computeNextOccurrence(source.recurrence, new Date(source.dueDate));
-      const y = next.getFullYear();
-      const m = String(next.getMonth() + 1).padStart(2, "0");
-      const d = String(next.getDate()).padStart(2, "0");
       const firstId = statusesRef.current[0]?.id;
       if (!firstId) return;
       const siblings = tasksRef.current.filter((t) => t.parentId === source.parentId);
@@ -227,7 +204,7 @@ export function useTasks(module: TaskModule): UseTasksResult {
         teamIds: source.teamIds,
         excludedUserIds: source.excludedUserIds,
         startDate: null,
-        dueDate: fromDateInputValue(`${y}-${m}-${d}`),
+        dueDate: null,
         recurrence: source.recurrence,
         parentId: source.parentId,
         projectId: source.projectId,
@@ -237,14 +214,6 @@ export function useTasks(module: TaskModule): UseTasksResult {
         updatedAt: now,
       };
       try {
-        // Claim the spawn *before* creating anything: if a concurrent
-        // session (another tab, another user viewing the same list) already
-        // cleared this task's recurrence a moment earlier, recurrenceCleared
-        // comes back false and this session must not also create a next
-        // occurrence — that would leave two duplicate copies behind, one per
-        // session that raced to advance the same overdue task.
-        const clearResult = await updateTaskRequest(source.id, { recurrence: null });
-        if (!clearResult.recurrenceCleared) return;
         const created = await createTaskRequest(draft, source.id);
         await tasksSWR.mutate(
           (current) => {
@@ -254,14 +223,14 @@ export function useTasks(module: TaskModule): UseTasksResult {
           },
           { revalidate: false }
         );
-      } catch {
-        // Best-effort: source.recurrence stays set on failure, so it's retried next time tasks load.
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Failed to schedule the next occurrence.");
       } finally {
         overdueSpawnsInFlightRef.current.delete(source.id);
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
+    [toast]
   );
 
   useEffect(() => {
@@ -285,8 +254,9 @@ export function useTasks(module: TaskModule): UseTasksResult {
 
       const currentStatuses = statusesRef.current;
       const doneId = currentStatuses[currentStatuses.length - 1]?.id;
-      const completesRecurrence =
-        Boolean(existingTask?.recurrence) && Boolean(doneId) && patch.status === doneId && patch.status !== existingTask?.status;
+      const completesRecurrence = existingTask
+        ? isRecurringCompletion(existingTask.recurrence, existingTask.status, patch.status, doneId)
+        : false;
       if (completesRecurrence) {
         finalPatch = { ...patch, recurrence: null };
       }
@@ -304,14 +274,31 @@ export function useTasks(module: TaskModule): UseTasksResult {
         { revalidate: false }
       );
       try {
-        const updated = await updateTaskRequest(id, finalPatch);
-        await tasksSWR.mutate((current) => (current ?? previous).map((t) => (t.id === id ? updated : t)), { revalidate: false });
-        // updated.recurrenceCleared is false if a concurrent session already
-        // cleared this task's recurrence first (e.g. someone else completed
-        // it, or the overdue-auto-advance effect fired at the same moment)
-        // — that session already spawned the next occurrence, so this one
-        // must not spawn a duplicate.
-        if (completesRecurrence && existingTask && updated.recurrenceCleared) await spawnNextOccurrence(existingTask);
+        let nextOccurrence: Task | undefined;
+        let updated: Task;
+        if (completesRecurrence && existingTask) {
+          nextOccurrence = await spawnNextOccurrence(existingTask, doneId);
+          if (nextOccurrence) {
+            updated = { ...existingTask, ...finalPatch, recurrence: null, updatedAt: new Date().toISOString() };
+          } else {
+            updated = await updateTaskRequest(id, finalPatch);
+          }
+        } else {
+          updated = await updateTaskRequest(id, finalPatch);
+        }
+        await tasksSWR.mutate(
+          (current) => {
+            const list = (current ?? previous).map((t) => (t.id === id ? updated : t));
+            if (!nextOccurrence || list.some((t) => t.id === nextOccurrence.id)) return list;
+            return [...list, nextOccurrence];
+          },
+          { revalidate: false }
+        );
+        if (nextOccurrence) {
+          toast.success(
+            `Next occurrence scheduled for ${new Date(nextOccurrence.dueDate!).toLocaleDateString(undefined, { month: "short", day: "numeric" })}.`
+          );
+        }
       } catch (err) {
         await tasksSWR.mutate(previous, { revalidate: false });
         toast.error(err instanceof Error ? err.message : "Failed to update task.");

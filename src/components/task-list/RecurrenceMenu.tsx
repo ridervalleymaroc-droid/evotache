@@ -4,6 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDownIcon, RepeatIcon } from "@/components/ui/icons";
+import { calendarDateInCasablanca } from "@/lib/casablancaDate";
 import { WEEKDAY_LABELS, describeRecurrence } from "@/lib/recurrence";
 import { cn } from "@/lib/cn";
 import type { RecurrenceFrequency, RecurrenceRule } from "@/types/task";
@@ -23,11 +24,14 @@ const FREQUENCY_OPTIONS: { value: RecurrenceFrequency; label: string }[] = [
 
 function defaultRule(dueDate: string | null): RecurrenceRule {
   const base = dueDate ? new Date(dueDate) : new Date();
-  return { frequency: "weekly", interval: 1, daysOfWeek: [base.getDay()], dayOfMonth: null };
+  const [year, month, day] = calendarDateInCasablanca(base).split("-").map(Number);
+  const calendarDay = new Date(Date.UTC(year, month - 1, day));
+  return { frequency: "weekly", interval: 1, daysOfWeek: [calendarDay.getUTCDay()], dayOfMonth: null };
 }
 
 export function RecurrenceMenu({ value, dueDate, onChange, readOnly }: RecurrenceMenuProps) {
   const [open, setOpen] = useState(false);
+  const [todayCalendarDate] = useState(() => calendarDateInCasablanca(new Date()));
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -201,7 +205,7 @@ export function RecurrenceMenu({ value, dueDate, onChange, readOnly }: Recurrenc
                       type="number"
                       min={1}
                       max={31}
-                      value={value.dayOfMonth ?? (dueDate ? new Date(dueDate).getDate() : new Date().getDate())}
+                      value={value.dayOfMonth ?? Number((dueDate ? calendarDateInCasablanca(new Date(dueDate)) : todayCalendarDate).slice(-2))}
                       onChange={(event) => patchRule({ dayOfMonth: Math.min(31, Math.max(1, Number(event.target.value) || 1)) })}
                       className="w-14 rounded-md border border-slate-200 px-2 py-1 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
                     />

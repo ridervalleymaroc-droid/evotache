@@ -26,12 +26,16 @@ export async function fetchAssignees(): Promise<Assignee[]> {
   return fetchActiveUserAssignees();
 }
 
-/** `continuesTaskId` marks this draft as the next occurrence of that existing recurring task, so the server assigns it the same owner as the series instead of whoever's session happened to spawn it. */
-export async function createTaskRequest(draft: TaskDraft, continuesTaskId?: string): Promise<Task> {
+/** `continuesTaskId` marks this as the next occurrence; the server computes its Casablanca due date, copies the rule and owner from the source, and returns the same occurrence on retries. `completesSource` completes the source in the same transaction as occurrence creation. */
+export async function createTaskRequest(
+  draft: TaskDraft,
+  continuesTaskId?: string,
+  options: { completesSource?: boolean; completionStatus?: string } = {}
+): Promise<Task> {
   const response = await fetch("/api/tasks", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(continuesTaskId ? { ...draft, continuesTaskId } : draft),
+    body: JSON.stringify(continuesTaskId ? { ...draft, continuesTaskId, ...options } : draft),
   });
   if (!response.ok) return parseErrorOrThrow(response);
   return response.json();

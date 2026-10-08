@@ -4,6 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon, XIcon } from "@/components/ui/icons";
+import { calendarDateInCasablanca, dateAtCasablancaMidnight } from "@/lib/casablancaDate";
 import { isDueSoon, isOverdue } from "@/lib/date";
 import { useLanguage } from "@/hooks/useLanguage";
 import { cn } from "@/lib/cn";
@@ -23,33 +24,38 @@ type ActiveField = "start" | "due";
 const WEEKDAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 
 function startOfDay(date: Date): Date {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  return d;
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+}
+
+function dateOnlyInCasablanca(date: Date): Date {
+  const [year, month, day] = calendarDateInCasablanca(date).split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day));
 }
 
 function addDays(date: Date, days: number): Date {
   const d = new Date(date);
-  d.setDate(d.getDate() + days);
+  d.setUTCDate(d.getUTCDate() + days);
   return d;
 }
 
 function isSameDay(a: Date, b: Date): boolean {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  return a.getUTCFullYear() === b.getUTCFullYear() && a.getUTCMonth() === b.getUTCMonth() && a.getUTCDate() === b.getUTCDate();
 }
 
-/** Local midnight -> ISO, matching fromDateInputValue's semantics (never a naive UTC slice — see src/lib/date.ts). */
 function toIso(date: Date): string {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).toISOString();
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  return dateAtCasablancaMidnight(`${year}-${month}-${day}`).toISOString();
 }
 
 function formatShort(date: Date): string {
-  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" });
 }
 
 function formatBoxValue(iso: string | null): string {
   if (!iso) return "";
-  return formatShort(new Date(iso));
+  return formatShort(dateOnlyInCasablanca(new Date(iso)));
 }
 
 interface Shortcut {
@@ -58,7 +64,7 @@ interface Shortcut {
 }
 
 function buildShortcuts(today: Date): Shortcut[] {
-  const dow = today.getDay(); // 0=Sun..6=Sat
+  const dow = today.getUTCDay(); // 0=Sun..6=Sat
   const thisWeekend = dow === 6 ? today : addDays(today, (6 - dow + 7) % 7);
   const nextWeek = addDays(today, ((1 - dow + 7) % 7) || 7);
   const nextWeekend = addDays(thisWeekend, 7);
@@ -74,8 +80,8 @@ function buildShortcuts(today: Date): Shortcut[] {
 }
 
 function buildMonthGrid(viewMonth: Date): Date[] {
-  const first = new Date(viewMonth.getFullYear(), viewMonth.getMonth(), 1);
-  const gridStart = addDays(first, -first.getDay());
+  const first = new Date(Date.UTC(viewMonth.getUTCFullYear(), viewMonth.getUTCMonth(), 1));
+  const gridStart = addDays(first, -first.getUTCDay());
   return Array.from({ length: 42 }, (_, i) => addDays(gridStart, i));
 }
 
@@ -84,13 +90,13 @@ export function DueDateMenu({ startDate = null, dueDate, onChangeStart, onChange
   const showStart = Boolean(onChangeStart);
   const [open, setOpen] = useState(false);
   const [activeField, setActiveField] = useState<ActiveField>("due");
-  const [viewMonth, setViewMonth] = useState(() => startOfDay(new Date()));
+  const [viewMonth, setViewMonth] = useState(() => dateOnlyInCasablanca(new Date()));
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const startTriggerRef = useRef<HTMLButtonElement>(null);
   const dueTriggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  const today = startOfDay(new Date());
+  const today = dateOnlyInCasablanca(new Date());
   const overdue = isOverdue(dueDate);
   const soon = isDueSoon(dueDate);
 
@@ -134,7 +140,7 @@ export function DueDateMenu({ startDate = null, dueDate, onChangeStart, onChange
     if (readOnly) return;
     setActiveField(field);
     const current = field === "start" ? startDate : dueDate;
-    setViewMonth(startOfDay(current ? new Date(current) : new Date()));
+    setViewMonth(current ? dateOnlyInCasablanca(new Date(current)) : today);
     setOpen(true);
   }
 
@@ -162,7 +168,7 @@ export function DueDateMenu({ startDate = null, dueDate, onChangeStart, onChange
     return (
       <span className={cn("inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium", toneClass)}>
         <CalendarIcon className="h-3.5 w-3.5 shrink-0" />
-        {dueDate ? formatShort(new Date(dueDate)) : t("tasks.noDueDate")}
+        {dueDate ? formatBoxValue(dueDate) : t("tasks.noDueDate")}
       </span>
     );
   }
@@ -244,7 +250,7 @@ export function DueDateMenu({ startDate = null, dueDate, onChangeStart, onChange
             <div className="flex-1 p-2.5">
               <div className="mb-2 flex items-center justify-between">
                 <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">
-                  {viewMonth.toLocaleDateString(undefined, { month: "long", year: "numeric" })}
+                  {viewMonth.toLocaleDateString(undefined, { month: "long", year: "numeric", timeZone: "UTC" })}
                 </p>
                 <div className="flex items-center gap-1">
                   <button
@@ -257,7 +263,7 @@ export function DueDateMenu({ startDate = null, dueDate, onChangeStart, onChange
                   <button
                     type="button"
                     aria-label="Previous month"
-                    onClick={() => setViewMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() - 1, 1))}
+                    onClick={() => setViewMonth(new Date(Date.UTC(viewMonth.getUTCFullYear(), viewMonth.getUTCMonth() - 1, 1)))}
                     className="rounded p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
                   >
                     <ChevronLeftIcon className="h-3.5 w-3.5" />
@@ -265,7 +271,7 @@ export function DueDateMenu({ startDate = null, dueDate, onChangeStart, onChange
                   <button
                     type="button"
                     aria-label="Next month"
-                    onClick={() => setViewMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 1))}
+                    onClick={() => setViewMonth(new Date(Date.UTC(viewMonth.getUTCFullYear(), viewMonth.getUTCMonth() + 1, 1)))}
                     className="rounded p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
                   >
                     <ChevronRightIcon className="h-3.5 w-3.5" />
@@ -280,9 +286,9 @@ export function DueDateMenu({ startDate = null, dueDate, onChangeStart, onChange
                   </span>
                 ))}
                 {grid.map((day) => {
-                  const inMonth = day.getMonth() === viewMonth.getMonth();
+                  const inMonth = day.getUTCMonth() === viewMonth.getUTCMonth();
                   const isToday = isSameDay(day, today);
-                  const isSelected = activeValue ? isSameDay(day, new Date(activeValue)) : false;
+                  const isSelected = activeValue ? isSameDay(day, dateOnlyInCasablanca(new Date(activeValue))) : false;
                   return (
                     <button
                       key={day.toISOString()}
@@ -296,7 +302,7 @@ export function DueDateMenu({ startDate = null, dueDate, onChangeStart, onChange
                         isSelected && "bg-indigo-600 font-semibold text-white hover:bg-indigo-600"
                       )}
                     >
-                      {day.getDate()}
+                      {day.getUTCDate()}
                     </button>
                   );
                 })}
