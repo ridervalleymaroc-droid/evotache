@@ -5,7 +5,7 @@ import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon, XIcon } from "@/components/ui/icons";
 import { calendarDateInCasablanca, dateAtCasablancaMidnight } from "@/lib/casablancaDate";
-import { isDueSoon, isOverdue } from "@/lib/date";
+import { formatCalendarDate, isDueSoon, isOverdue } from "@/lib/date";
 import { useLanguage } from "@/hooks/useLanguage";
 import { cn } from "@/lib/cn";
 import type { TranslationKey } from "@/i18n/en";
@@ -53,9 +53,9 @@ function formatShort(date: Date): string {
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" });
 }
 
-function formatBoxValue(iso: string | null): string {
+function formatBoxValue(iso: string | null, locale: "en" | "fr"): string {
   if (!iso) return "";
-  return formatShort(dateOnlyInCasablanca(new Date(iso)));
+  return formatCalendarDate(iso, locale === "fr" ? "fr-FR" : "en-US");
 }
 
 interface Shortcut {
@@ -86,7 +86,7 @@ function buildMonthGrid(viewMonth: Date): Date[] {
 }
 
 export function DueDateMenu({ startDate = null, dueDate, onChangeStart, onChangeDue, readOnly }: DueDateMenuProps) {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const showStart = Boolean(onChangeStart);
   const [open, setOpen] = useState(false);
   const [activeField, setActiveField] = useState<ActiveField>("due");
@@ -168,7 +168,7 @@ export function DueDateMenu({ startDate = null, dueDate, onChangeStart, onChange
     return (
       <span className={cn("inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium", toneClass)}>
         <CalendarIcon className="h-3.5 w-3.5 shrink-0" />
-        {dueDate ? formatBoxValue(dueDate) : t("tasks.noDueDate")}
+        {dueDate ? formatBoxValue(dueDate, locale) : t("tasks.noDueDate")}
       </span>
     );
   }
@@ -191,7 +191,7 @@ export function DueDateMenu({ startDate = null, dueDate, onChangeStart, onChange
           )}
         >
           <CalendarIcon className="h-3.5 w-3.5 shrink-0" />
-          {startDate ? formatBoxValue(startDate) : t("dueDate.startDate")}
+          {startDate ? formatBoxValue(startDate, locale) : t("dueDate.startDate")}
         </button>
       )}
 
@@ -206,7 +206,7 @@ export function DueDateMenu({ startDate = null, dueDate, onChangeStart, onChange
         )}
       >
         <CalendarIcon className="h-3.5 w-3.5 shrink-0" />
-        {dueDate ? formatBoxValue(dueDate) : t("dueDate.dueDate")}
+        {dueDate ? formatBoxValue(dueDate, locale) : t("dueDate.dueDate")}
       </button>
 
       {open &&
