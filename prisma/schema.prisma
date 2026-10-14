@@ -67,12 +67,12 @@ model User {
 }
 
 model Team {
-  id               String   @id @default(cuid())
-  name             String
-  color            String
-  memberIds        String[] @default([])
-  excludedUserIds  String[] @default([])
-  createdAt        DateTime @default(now())
+  id              String   @id @default(cuid())
+  name            String
+  color           String
+  memberIds       String[] @default([])
+  excludedUserIds String[] @default([])
+  createdAt       DateTime @default(now())
 
   @@map("teams")
 }
@@ -210,19 +210,19 @@ enum ConversationType {
 }
 
 model Conversation {
-  id                  String           @id @default(cuid())
-  type                ConversationType
-  name                String?
-  participantIds      String[]         @default([])
-  avatarDataUrl       String?
-  createdBy           String
-  createdAt           DateTime         @default(now())
-  lastMessageAt       DateTime         @default(now())
-  lastMessagePreview  String?
-  lastReadAt          Json             @default("{}")
+  id                 String           @id @default(cuid())
+  type               ConversationType
+  name               String?
+  participantIds     String[]         @default([])
+  avatarDataUrl      String?
+  createdBy          String
+  createdAt          DateTime         @default(now())
+  lastMessageAt      DateTime         @default(now())
+  lastMessagePreview String?
+  lastReadAt         Json             @default("{}")
   // Ids of agent participants currently composing a reply (fire-and-forget
   // OpenAI round-trip) — polled by the client to show a "typing…" bubble.
-  typingAgentIds      String[]         @default([])
+  typingAgentIds     String[]         @default([])
 
   messages Message[]
 
@@ -342,8 +342,8 @@ model AgentSchedule {
 }
 
 model ReminderRule {
-  id    String  @id @default(cuid())
-  name  String
+  id      String  @id @default(cuid())
+  name    String
   // "overdue_escalation" | "meeting"
   kind    String
   enabled Boolean @default(true)
@@ -367,8 +367,8 @@ model ReminderRule {
 
   lastRunAt DateTime?
   createdBy String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   @@map("reminder_rules")
 }
@@ -500,11 +500,11 @@ model Attachment {
 }
 
 model ArchivedItem {
-  id         String    @id @default(cuid())
+  id         String   @id @default(cuid())
   module     String
   originalId String
   title      String
-  archivedAt DateTime  @default(now())
+  archivedAt DateTime @default(now())
   archivedBy String
   // Path to the full serialized payload in Supabase Storage — deliberately
   // not stored here, so archiving actually shrinks the database.
@@ -864,13 +864,82 @@ model WorkshopSession {
 }
 
 model WorkshopStatusHistory {
-  id         String         @id @default(cuid())
-  repairId   String
-  repair     WorkshopRepair @relation(fields: [repairId], references: [id], onDelete: Cascade)
-  oldStatus  String?
-  newStatus  String
-  changedBy  String?
-  changedAt  DateTime       @default(now())
+  id        String         @id @default(cuid())
+  repairId  String
+  repair    WorkshopRepair @relation(fields: [repairId], references: [id], onDelete: Cascade)
+  oldStatus String?
+  newStatus String
+  changedBy String?
+  changedAt DateTime       @default(now())
 
   @@map("workshop_status_history")
+}
+
+model Customer {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email     String   @unique
+  phone     String?
+  fullName  String?  @map("full_name")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("customers")
+}
+
+model ProductRequest {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  customerEmail String   @map("customer_email")
+  productName   String   @map("product_name")
+  productSku    String?  @map("product_sku")
+  productUrl    String?  @map("product_url")
+  quantity      Int?     @default(1)
+  status        String?  @default("nouveau")
+  notes         String?
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  history       RequestHistory[]
+  notifications NotificationLog[]
+
+  @@index([status], map: "idx_product_requests_status")
+  @@index([customerEmail], map: "idx_product_requests_email")
+  @@map("product_requests")
+}
+
+model RequestHistory {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  requestId  String?  @map("request_id") @db.Uuid
+  changedBy  String?  @map("changed_by")
+  oldStatus  String?  @map("old_status")
+  newStatus  String?  @map("new_status")
+  notes      String?
+  changeDate DateTime @default(now()) @map("change_date") @db.Timestamptz(6)
+
+  request ProductRequest? @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@map("request_history")
+}
+
+model StockEvent {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  productSku String   @map("product_sku")
+  eventType  String?  @map("event_type")
+  oldStock   Int?     @map("old_stock")
+  newStock   Int?     @map("new_stock")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("stock_events")
+}
+
+model NotificationLog {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  requestId        String?  @map("request_id") @db.Uuid
+  customerEmail    String   @map("customer_email")
+  notificationType String?  @map("notification_type")
+  status           String?  @default("envoye")
+  sentAt           DateTime @default(now()) @map("sent_at") @db.Timestamptz(6)
+
+  request ProductRequest? @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@map("notification_logs")
 }
